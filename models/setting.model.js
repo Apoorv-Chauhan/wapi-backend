@@ -221,6 +221,10 @@ const settingSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  solution_id: {
+    type: String,
+    default: null
+  },
   max_groups_per_user: {
     type: Number,
     default: 500

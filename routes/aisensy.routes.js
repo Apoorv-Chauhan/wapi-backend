@@ -15,12 +15,13 @@ import {
   handleWebhook,
 } from "../controllers/aisensy-webhook.controller.js";
 import { sendMessage } from "../controllers/aisensy-message.controller.js";
+import { authenticateUser } from "../middlewares/auth.js";
 
 const router = express.Router();
 const upload = multer(); // 👈 important
 
 router.post("/onboard", upload.none(), onboardClient);
-router.post("/generate-waba-link", createWabaLink);
+router.post("/generate-waba-link", authenticateUser, createWabaLink);
 router.post("/webhook/aisensy", handleWebhook);
 router.post("/status", checkWabaStatus);
 router.post("/send-message", sendMessage); // optional endpoint to test message sending

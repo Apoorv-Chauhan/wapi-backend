@@ -1,4 +1,5 @@
-import { Workspace, WhatsappWaba } from '../models/index.js';
+import { Workspace, WhatsappWaba, User } from '../models/index.js';
+import { createProject } from '../services/aisensy/aisensy.service.js';
 
 export const createWorkspace = async (req, res) => {
     try {
@@ -17,6 +18,25 @@ export const createWorkspace = async (req, res) => {
             name,
             description
         });
+
+        // Create AiSensy project for the workspace
+        try {
+            const user = await User.findById(userId);
+            if (user?.aisensy_business_id) {
+                const aisensyProject = await createProject(user.aisensy_business_id, name);
+                
+                if (aisensyProject?.projectId || aisensyProject?.project_id) {
+                    workspace.aisensy_project_id = aisensyProject.projectId || aisensyProject.project_id;
+                    await workspace.save();
+                    console.log('✅ AiSensy project created:', workspace.aisensy_project_id);
+                } else {
+                    console.log('⚠️ AiSensy project created but no ID returned:', aisensyProject);
+                }
+            }
+        } catch (aisensyError) {
+            console.error('Failed to create AiSensy project:', aisensyError.response?.data || aisensyError.message);
+            // Continue even if AiSensy project creation fails
+        }
 
         return res.status(201).json({
             success: true,
@@ -52,7 +72,12 @@ export const getWorkspaces = async (req, res) => {
                 ...ws,
                 waba_id: waba?._id || null,
                 connection_status: waba?.connection_status || null,
-                waba_type: waba?.provider || null
+                waba_type: waba?.provider || null,
+                waba_name: waba?.name || null,
+                waba_instance_name: waba?.instance_name || null,
+                is_active: waba?.is_active || false,
+                connected_at: waba?.updatedAt || null,
+                whatsapp_business_account_id: waba?.whatsapp_business_account_id || null
             };
         });
 

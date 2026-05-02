@@ -33,6 +33,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  company: {
+    type: String,
+    default: null
+  },
   role: {
     type: String,
     enum: ['super_admin', 'user', 'agent'],
@@ -77,6 +81,10 @@ const userSchema = new mongoose.Schema({
   },
   player_id: {
     type: String
+  },
+  aisensy_business_id: {
+    type: String,
+    default: null
   },
   deleted_at: {
     type: Date,

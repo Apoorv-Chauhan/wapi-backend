@@ -19,6 +19,10 @@ const workspaceSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
+    aisensy_project_id: {
+        type: String,
+        default: null
+    },
     deleted_at: {
         type: Date,
         default: null

@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { generateToken } from '../utils/jwt.js';
 import { User, Session, Setting, OTPLog } from '../models/index.js';
 import { sendMail } from '../utils/mail.js';
+import { createBusiness } from '../services/aisensy/aisensy.service.js';
 const OTP_LENGTH = 6;
 const OTP_EXPIRATION_MINUTES = 10;
 const DEFAULT_SESSION_EXPIRATION_DAYS = 7;
@@ -165,7 +166,7 @@ This is an automated message. Please do not reply.
 
 
 export const register = async (req, res) => {
-  const { name, email, phone, countryCode, password } = req.body;
+  const { name, email, phone, countryCode, password, company } = req.body;
 
   if (!name || !email || !phone || !countryCode || !password) {
     return res.status(400).json({ message: 'All fields are required.' });
@@ -178,6 +179,7 @@ export const register = async (req, res) => {
       phone,
       countryCode,
       password,
+      company,
       role = 'user'
     } = req.body;
 
@@ -235,14 +237,36 @@ export const register = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
-    await User.create({
+    const newUser = await User.create({
       name: name.trim(),
       email: normalizedEmail,
       country_code: countryCode,
       phone,
+      company: company?.trim() || null,
       role,
       password: hashedPassword
     });
+
+    // Create AiSensy business for the user
+    try {
+      const aisensyBusiness = await createBusiness({
+        display_name: name.trim(),
+        email: normalizedEmail,
+        company: company?.trim() || name.trim(),
+        contact: `${countryCode}${phone}`
+      });
+      
+      if (aisensyBusiness?.businessId || aisensyBusiness?.business_id) {
+        newUser.aisensy_business_id = aisensyBusiness.businessId || aisensyBusiness.business_id;
+        await newUser.save();
+        console.log('✅ AiSensy business created:', newUser.aisensy_business_id);
+      } else {
+        console.log('⚠️ AiSensy business created but no ID returned:', aisensyBusiness);
+      }
+    } catch (aisensyError) {
+      console.error('❌ Failed to create AiSensy business:', aisensyError.response?.data || aisensyError.message);
+      // Continue even if AiSensy business creation fails
+    }
 
     return res.status(201).json({
       success: true,
