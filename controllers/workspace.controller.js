@@ -160,7 +160,7 @@ export const updateWorkspace = async (req, res) => {
         const workspace = await Workspace.findOneAndUpdate(
             { _id: id, user_id: userId, deleted_at: null },
             { name, description, is_active },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
 
         if (!workspace) {
@@ -192,7 +192,7 @@ export const deleteWorkspace = async (req, res) => {
         const workspace = await Workspace.findOneAndUpdate(
             { _id: id, user_id: userId, deleted_at: null },
             { deleted_at: new Date() },
-            { new: true }
+            { returnDocument: 'after' }
         );
 
         if (!workspace) {

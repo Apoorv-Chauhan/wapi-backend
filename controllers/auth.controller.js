@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { generateToken } from '../utils/jwt.js';
 import { User, Session, Setting, OTPLog } from '../models/index.js';
 import { sendMail } from '../utils/mail.js';
-import { createBusiness } from '../services/aisensy/aisensy.service.js';
+import { getOrCreateBusiness } from '../services/aisensy/aisensy.service.js';
 const OTP_LENGTH = 6;
 const OTP_EXPIRATION_MINUTES = 10;
 const DEFAULT_SESSION_EXPIRATION_DAYS = 7;
@@ -248,36 +248,80 @@ export const register = async (req, res) => {
     });
 
     // Create AiSensy business for the user
+    let aisensyBusinessId = null;
     try {
-      console.log('🔄 Creating AISensy business for user:', {
+      console.log('🔄 [REGISTRATION] Getting or creating AISensy business for user:', {
+        userId: newUser._id,
         name: name.trim(),
         email: normalizedEmail,
         company: company?.trim() || name.trim(),
-        contact: `${countryCode}${phone}`
+        contact: `${countryCode}${phone}`,
+        timestamp: new Date().toISOString()
       });
 
-      const aisensyBusiness = await createBusiness({
-        display_name: name.trim(),
-        email: normalizedEmail,
-        company: company?.trim() || name.trim(),
-        contact: `${countryCode}${phone}`
-      });
-      
-      console.log('📦 AISensy business API response:', aisensyBusiness);
-
-      if (aisensyBusiness?.businessId || aisensyBusiness?.business_id) {
-        newUser.aisensy_business_id = aisensyBusiness.businessId || aisensyBusiness.business_id;
-        await newUser.save();
-        console.log('✅ AiSensy business created and saved:', {
-          userId: newUser._id,
-          businessId: newUser.aisensy_business_id
-        });
+      // Check if AISensy is configured
+      if (!process.env.AISENSY_BASE_URL || !process.env.AISENSY_API_KEY || !process.env.AISENSY_PARTNER_ID) {
+        console.error('❌ [REGISTRATION] AISensy not configured - skipping business creation');
+        console.error('   AISENSY_BASE_URL:', !!process.env.AISENSY_BASE_URL);
+        console.error('   AISENSY_API_KEY:', !!process.env.AISENSY_API_KEY);
+        console.error('   AISENSY_PARTNER_ID:', !!process.env.AISENSY_PARTNER_ID);
       } else {
-        console.error('⚠️ AiSensy business API returned unexpected response:', aisensyBusiness);
+        const aisensyBusiness = await getOrCreateBusiness({
+          display_name: name.trim(),
+          email: normalizedEmail,
+          company: company?.trim() || name.trim(),
+          contact: `${countryCode}${phone}`
+        });
+        
+        console.log('📦 [REGISTRATION] AISensy business response:', {
+          userId: newUser._id,
+          businessId: aisensyBusiness.businessId || aisensyBusiness.business_id,
+          isExisting: aisensyBusiness.isExisting,
+          fullResponse: JSON.stringify(aisensyBusiness)
+        });
+
+        if (aisensyBusiness?.businessId || aisensyBusiness?.business_id) {
+          aisensyBusinessId = aisensyBusiness.businessId || aisensyBusiness.business_id;
+          
+          console.log('💾 [REGISTRATION] Saving business ID to database:', {
+            userId: newUser._id,
+            businessId: aisensyBusinessId,
+            beforeSave: newUser.aisensy_business_id
+          });
+
+          newUser.aisensy_business_id = aisensyBusinessId;
+          const savedUser = await newUser.save();
+          
+          console.log('✅ [REGISTRATION] Business ID saved successfully:', {
+            userId: savedUser._id,
+            businessId: savedUser.aisensy_business_id,
+            isExisting: aisensyBusiness.isExisting,
+            verified: savedUser.aisensy_business_id === aisensyBusinessId
+          });
+
+          // Double-check by fetching from database
+          const verifyUser = await User.findById(newUser._id).select('aisensy_business_id');
+          console.log('🔍 [REGISTRATION] Database verification:', {
+            userId: verifyUser._id,
+            businessIdInDb: verifyUser.aisensy_business_id,
+            matches: verifyUser.aisensy_business_id === aisensyBusinessId
+          });
+
+        } else {
+          console.error('⚠️ [REGISTRATION] AiSensy business API returned unexpected response:', {
+            userId: newUser._id,
+            response: aisensyBusiness,
+            hasBusinessId: !!(aisensyBusiness?.businessId),
+            hasBusiness_id: !!(aisensyBusiness?.business_id)
+          });
+        }
       }
     } catch (aisensyError) {
-      console.error('❌ Failed to create AiSensy business:', {
+      console.error('❌ [REGISTRATION] Failed to get/create AiSensy business:', {
+        userId: newUser._id,
+        email: normalizedEmail,
         error: aisensyError.message,
+        stack: aisensyError.stack,
         response: aisensyError.response?.data,
         status: aisensyError.response?.status,
         config: {
@@ -293,7 +337,13 @@ export const register = async (req, res) => {
       success: true,
       message: `${role} registered successfully`,
       data: {
-        redirect: '/login'
+        redirect: '/login',
+        user: {
+          id: newUser._id,
+          email: newUser.email,
+          name: newUser.name,
+          aisensy_business_id: newUser.aisensy_business_id || null
+        }
       }
     });
   } catch (error) {

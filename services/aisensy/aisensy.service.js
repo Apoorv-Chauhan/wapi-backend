@@ -89,6 +89,100 @@ export const createBusiness = async (data) => {
   }
 };
 
+/**
+ * Get all businesses for the partner
+ * This allows us to find existing businesses by email
+ */
+export const getAllBusinesses = async () => {
+  try {
+    if (!BASE_URL || !process.env.AISENSY_PARTNER_ID || !API_KEY) {
+      throw new Error('Missing AISensy configuration');
+    }
+
+    const url = `${BASE_URL}/partner-apis/v1/partner/${process.env.AISENSY_PARTNER_ID}/business`;
+    
+    console.log('🔄 Fetching all AISensy businesses from:', url);
+
+    const res = await axios.get(url, { headers });
+
+    console.log(`✅ Fetched ${res.data?.length || 0} businesses from AISensy`);
+    return res.data;
+  } catch (err) {
+    console.error("❌ Get Businesses Error:", {
+      message: err.message,
+      response: err.response?.data,
+      status: err.response?.status
+    });
+    throw err;
+  }
+};
+
+/**
+ * Find business by email from AISensy
+ * Returns the business object if found, null otherwise
+ */
+export const findBusinessByEmail = async (email) => {
+  try {
+    const businesses = await getAllBusinesses();
+    
+    if (!businesses || !Array.isArray(businesses)) {
+      console.log('⚠️ No businesses returned from AISensy');
+      return null;
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const business = businesses.find(b => 
+      b.email?.toLowerCase().trim() === normalizedEmail ||
+      b.user_name?.toLowerCase().trim() === normalizedEmail
+    );
+
+    if (business) {
+      console.log(`✅ Found existing business for ${email}:`, {
+        businessId: business.business_id || business.id,
+        displayName: business.display_name
+      });
+      return business;
+    } else {
+      console.log(`⚠️ No existing business found for ${email}`);
+      return null;
+    }
+  } catch (err) {
+    console.error(`❌ Error finding business for ${email}:`, err.message);
+    throw err;
+  }
+};
+
+/**
+ * Get or create business - tries to find existing first, creates if not found
+ */
+export const getOrCreateBusiness = async (data) => {
+  try {
+    // First, try to find existing business
+    console.log(`🔍 Checking if business exists for ${data.email}...`);
+    const existingBusiness = await findBusinessByEmail(data.email);
+    
+    if (existingBusiness) {
+      console.log(`✅ Using existing business for ${data.email}`);
+      return {
+        ...existingBusiness,
+        businessId: existingBusiness.business_id || existingBusiness.id,
+        isExisting: true
+      };
+    }
+
+    // If not found, create new business
+    console.log(`📝 No existing business found, creating new one for ${data.email}`);
+    const newBusiness = await createBusiness(data);
+    return {
+      ...newBusiness,
+      isExisting: false
+    };
+  } catch (err) {
+    console.error(`❌ Error in getOrCreateBusiness for ${data.email}:`, err.message);
+    throw err;
+  }
+};
+
 export const createProject = async (businessId, name) => {
   try {
     // Validate required environment variables
