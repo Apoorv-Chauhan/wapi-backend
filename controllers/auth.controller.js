@@ -249,6 +249,13 @@ export const register = async (req, res) => {
 
     // Create AiSensy business for the user
     try {
+      console.log('🔄 Creating AISensy business for user:', {
+        name: name.trim(),
+        email: normalizedEmail,
+        company: company?.trim() || name.trim(),
+        contact: `${countryCode}${phone}`
+      });
+
       const aisensyBusiness = await createBusiness({
         display_name: name.trim(),
         email: normalizedEmail,
@@ -256,15 +263,29 @@ export const register = async (req, res) => {
         contact: `${countryCode}${phone}`
       });
       
+      console.log('📦 AISensy business API response:', aisensyBusiness);
+
       if (aisensyBusiness?.businessId || aisensyBusiness?.business_id) {
         newUser.aisensy_business_id = aisensyBusiness.businessId || aisensyBusiness.business_id;
         await newUser.save();
-        console.log('✅ AiSensy business created:', newUser.aisensy_business_id);
+        console.log('✅ AiSensy business created and saved:', {
+          userId: newUser._id,
+          businessId: newUser.aisensy_business_id
+        });
       } else {
-        console.log('⚠️ AiSensy business created but no ID returned:', aisensyBusiness);
+        console.error('⚠️ AiSensy business API returned unexpected response:', aisensyBusiness);
       }
     } catch (aisensyError) {
-      console.error('❌ Failed to create AiSensy business:', aisensyError.response?.data || aisensyError.message);
+      console.error('❌ Failed to create AiSensy business:', {
+        error: aisensyError.message,
+        response: aisensyError.response?.data,
+        status: aisensyError.response?.status,
+        config: {
+          baseURL: process.env.AISENSY_BASE_URL,
+          partnerId: process.env.AISENSY_PARTNER_ID,
+          hasApiKey: !!process.env.AISENSY_API_KEY
+        }
+      });
       // Continue even if AiSensy business creation fails
     }
 

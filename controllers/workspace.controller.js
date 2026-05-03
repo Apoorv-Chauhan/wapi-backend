@@ -22,19 +22,43 @@ export const createWorkspace = async (req, res) => {
         // Create AiSensy project for the workspace
         try {
             const user = await User.findById(userId);
-            if (user?.aisensy_business_id) {
+            
+            if (!user) {
+                console.error('❌ User not found for workspace creation');
+            } else if (!user.aisensy_business_id) {
+                console.error('❌ User does not have aisensy_business_id:', {
+                    userId: user._id,
+                    email: user.email,
+                    name: user.name
+                });
+            } else {
+                console.log('🔄 Creating AISensy project for workspace:', {
+                    userId: user._id,
+                    businessId: user.aisensy_business_id,
+                    workspaceName: name
+                });
+
                 const aisensyProject = await createProject(user.aisensy_business_id, name);
                 
                 if (aisensyProject?.projectId || aisensyProject?.project_id) {
                     workspace.aisensy_project_id = aisensyProject.projectId || aisensyProject.project_id;
                     await workspace.save();
-                    console.log('✅ AiSensy project created:', workspace.aisensy_project_id);
+                    console.log('✅ AiSensy project created successfully:', {
+                        workspaceId: workspace._id,
+                        projectId: workspace.aisensy_project_id
+                    });
                 } else {
-                    console.log('⚠️ AiSensy project created but no ID returned:', aisensyProject);
+                    console.error('⚠️ AiSensy project API returned unexpected response:', aisensyProject);
                 }
             }
         } catch (aisensyError) {
-            console.error('Failed to create AiSensy project:', aisensyError.response?.data || aisensyError.message);
+            console.error('❌ Failed to create AiSensy project:', {
+                error: aisensyError.message,
+                response: aisensyError.response?.data,
+                status: aisensyError.response?.status,
+                userId,
+                workspaceName: name
+            });
             // Continue even if AiSensy project creation fails
         }
 
