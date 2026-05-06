@@ -1,11 +1,3 @@
-// import express from "express";
-// import { onboardClient } from "../controllers/aisensy.controller.js";
-
-// const router = express.Router();
-
-// router.post("/onboard", onboardClient);
-
-// export default router;
 import express from "express";
 import multer from "multer";
 import { onboardClient } from "../controllers/aisensy.controller.js";
@@ -17,6 +9,10 @@ import {
 import { sendMessage } from "../controllers/aisensy-message.controller.js";
 import { authenticateUser } from "../middlewares/auth.js";
 import { checkAISensyConfig } from "../services/aisensy/aisensy.service.js";
+import { regenerateToken, getTokenInfo } from "../controllers/aisensy-token.controller.js";
+import templateRoutes from "./aisensy/template.routes.js";
+import messagingRoutes from "./aisensy/messaging.routes.js";
+import flowRoutes from "./aisensy/flow.routes.js";
 
 const router = express.Router();
 const upload = multer(); // 👈 important
@@ -38,6 +34,20 @@ router.get("/config-check", authenticateUser, (req, res) => {
   }
 });
 
+// Token management endpoints
+router.post("/regenerate-token", authenticateUser, regenerateToken);
+router.get("/token-info", authenticateUser, getTokenInfo);
+
+// Template management endpoints
+router.use("/templates", templateRoutes);
+
+// Messaging endpoints
+router.use("/messages", messagingRoutes);
+
+// Flow management endpoints
+router.use("/flows", flowRoutes);
+
+// Existing endpoints
 router.post("/onboard", upload.none(), onboardClient);
 router.post("/generate-waba-link", authenticateUser, createWabaLink);
 router.post("/webhook/aisensy", handleWebhook);

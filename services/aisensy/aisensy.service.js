@@ -225,3 +225,67 @@ export const createProject = async (businessId, name) => {
     throw err;
   }
 };
+
+/**
+ * Regenerate AISensy JWT Bearer Token
+ * @param {string} username - AISensy user email
+ * @param {string} password - AISensy user password
+ * @param {string} projectId - AISensy project ID
+ * @param {boolean} directApi - true = non-expiring token, false = expires in 24hrs
+ * @returns {Promise<Object>} - Token response
+ */
+export const regenerateJWTToken = async (username, password, projectId, directApi = true) => {
+  try {
+    // Validate inputs
+    if (!username || !password || !projectId) {
+      throw new Error('Username, password, and projectId are required');
+    }
+
+    // Create base64 encoded authorization token
+    // Format: username:password:projectId
+    const authString = `${username}:${password}:${projectId}`;
+    const base64Token = Buffer.from(authString).toString('base64');
+
+    console.log('🔄 Regenerating AISensy JWT token:', {
+      username,
+      projectId,
+      directApi,
+      url: `${process.env.AISENSY_DIRECT_BASE_URL}/direct-apis/t1/users/regenrate-token`
+    });
+
+    // Call AISensy API to regenerate token
+    const response = await axios.post(
+      `${process.env.AISENSY_DIRECT_BASE_URL}/direct-apis/t1/users/regenrate-token`,
+      {
+        direct_api: directApi
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${base64Token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      }
+    );
+
+    console.log('✅ JWT token regenerated successfully');
+    
+    return {
+      success: true,
+      token: response.data.users?.[0]?.token || response.data.token,
+      users: response.data.users,
+      directApi,
+      expiresIn: directApi ? 'Never' : '24 hours'
+    };
+
+  } catch (err) {
+    console.error("❌ Regenerate JWT Token Error:", {
+      message: err.message,
+      response: err.response?.data,
+      status: err.response?.status,
+      username,
+      projectId
+    });
+    throw err;
+  }
+};
